@@ -11,16 +11,35 @@ import workshopUrl from './assets/workshops.svg'
 
 const bookings: Array<Booking> = [...initialBookings]
 
-function readSeats(raw: FormDataEntryValue | null): number | null {
-  if (typeof raw !== 'string' || raw.trim() === '') return null
+type Result<T> = {status: 'ok', 
+                value: T} |
+                {status: 'failed',
+                  reason: string
+                }
+
+function readSeats(raw: FormDataEntryValue | null): Result<number> {
+  if (typeof raw !== 'string' || raw.trim() === '') 
+    return {status: 'failed', 
+            reason: 'Укажите число участников.'}
+
   const seats = Number(raw)
-  if (!Number.isInteger(seats) || seats < 1 || seats > 5) return null
-  return seats
+
+  if (!Number.isInteger(seats) || seats < 1 || seats > 5) 
+    return {
+      status: 'failed',
+      reason: 'Введите целое число участников от 1 до 5.'
+    }
+
+  return { status: 'ok', value: seats }
 }
 
-function readWorkshop(raw: FormDataEntryValue | null): WorkshopId | null {
+function readWorkshop(raw: FormDataEntryValue | null): Result<WorkshopId> {
   const match = ids.find(id => id === raw)
-  return match ?? null
+  if (match === undefined) {
+    return { status: 'failed', reason: 'Выберите занятие из списка.' }
+  }
+
+  return { status: 'ok', value: match }
 }
 
 const app = document.querySelector<HTMLDivElement>('#app')
@@ -117,7 +136,6 @@ ui.notice.remove()
 
 ui.logo.hidden = false
 ui.logo.src = workshopUrl
-// HW-Б2: задайте ui.logo.src, alt и покажите изображение.
 
 function render(items: Booking[]) {
   ui.list.replaceChildren()
@@ -150,18 +168,23 @@ ui.form.addEventListener('submit', (event) => {
     return
   }
 
-  const seats = readSeats(data.get('seats'))
-  if (seats === null) {
-    ui.message.textContent = 'Введите целое число участников от 1 до 5.'
+  const seatsResult = readSeats(data.get('seats'))
+
+  if (seatsResult.status === 'failed') {
+    ui.message.textContent = seatsResult.reason
     return
   }
 
-  const selectedWorkshop = readWorkshop(data.get('workshop'))
-  if (selectedWorkshop === null) {
-    ui.message.textContent = 'Вы не выбрали занятие'
+  const seats = seatsResult.value 
+
+  const workshopResult = readWorkshop(data.get('workshop'))
+
+  if (workshopResult.status === 'failed') {
+    ui.message.textContent = workshopResult.reason
     return
   }
 
+  const selectedWorkshop = workshopResult.value
 
   const remainingSeatsCount = getRemainingSeats(bookings, selectedWorkshop)
   if (seats > remainingSeatsCount) {
