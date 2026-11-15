@@ -1,26 +1,45 @@
 import './style.css'
-import type { Booking } from './models/booking'
+import type { Booking, WorkshopId } from './models/booking'
+import { ids } from './models/booking'
+
 import { initialBookings } from './data/initial-bookings'
 import { TYPESCRIPT_CAPACITY, BUILD_CAPACITY } from './data/capacities'
 import { countSeats } from './lib/count-seats'
-// HW-Б1: подключите расчёты из ./lib/availability.
-// HW-Б2: импортируйте ./assets/workshops.svg как URL.
+import { getRemainingSeats } from './lib/availability'
+
+import workshopUrl from './assets/workshops.svg'
 
 const bookings: Array<Booking> = [...initialBookings]
 
-// Проверка из практики уже работает. В базе менять её не требуется.
-function readSeats(raw: FormDataEntryValue | null): number | null {
-  if (typeof raw !== 'string' || raw.trim() === '') return null
+type Result<T> = {status: 'ok', 
+                value: T} |
+                {status: 'failed',
+                  reason: string
+                }
+
+function readSeats(raw: FormDataEntryValue | null): Result<number> {
+  if (typeof raw !== 'string' || raw.trim() === '') 
+    return {status: 'failed', 
+            reason: 'Укажите число участников.'}
+
   const seats = Number(raw)
-  if (!Number.isInteger(seats) || seats < 1 || seats > 5) return null
-  return seats
+
+  if (!Number.isInteger(seats) || seats < 1 || seats > 5) 
+    return {
+      status: 'failed',
+      reason: 'Введите целое число участников от 1 до 5.'
+    }
+
+  return { status: 'ok', value: seats }
 }
 
-// HW-А2: замените заглушку; нужный результат WorkshopId | null.
-// Для проверки через форму сначала включите список ui.workshop в месте HW-А4.
-function readWorkshop(raw: FormDataEntryValue | null): null {
-  void raw
-  return null
+function readWorkshop(raw: FormDataEntryValue | null): Result<WorkshopId> {
+  const match = ids.find(id => id === raw)
+  if (match === undefined) {
+    return { status: 'failed', reason: 'Выберите занятие из списка.' }
+  }
+
+  return { status: 'ok', value: match }
 }
 
 const app = document.querySelector<HTMLDivElement>('#app')
@@ -109,12 +128,14 @@ if (!(form instanceof HTMLFormElement) || !(list instanceof HTMLUListElement)
   throw new Error('Не найдены элементы интерфейса')
 }
 
-// Проверенные DOM-элементы уже готовы к использованию.
+
 const ui = { form, list, total, message, workshop, typescriptFree, buildFree, logo, notice }
 
-// HW-А4: сделайте список ui.workshop доступным для выбора уже при проверке А2.
-// Здесь же скройте или удалите найденный ui.notice после проверки DOM выше.
-// HW-Б2: задайте ui.logo.src, alt и покажите изображение.
+ui.workshop.disabled = false
+ui.notice.remove()
+
+ui.logo.hidden = false
+ui.logo.src = workshopUrl
 
 function render(items: Booking[]) {
   ui.list.replaceChildren()
@@ -123,13 +144,19 @@ function render(items: Booking[]) {
     const title = document.createElement('strong')
     const details = document.createElement('span')
     title.textContent = booking.name
-    // HW-А4: добавьте название занятия в подробности карточки.
-    details.textContent = `${booking.seats} участн. · ${booking.status === 'confirmed' ? 'Подтверждена' : 'Новая'} · ${booking.source}`
+
+    details.textContent = `${booking.seats} участн. 
+    · ${booking.status === 'confirmed' ? 'Подтверждена' : 'Новая'}
+     · ${booking.source}
+     · ${booking.workshop === 'typescript' ? 'TypeScript' : 'Сборка проекта'}`
+ 
     item.append(title, details)
     ui.list.append(item)
   })
+
   ui.total.textContent = String(countSeats(items))
-  // HW-А4: обновите ui.typescriptFree и ui.buildFree через общий расчёт.
+  ui.typescriptFree.textContent = String(getRemainingSeats(items, 'typescript'))
+  ui.buildFree.textContent = String(getRemainingSeats(items, 'build'))
 }
 
 ui.form.addEventListener('submit', (event) => {
@@ -141,14 +168,30 @@ ui.form.addEventListener('submit', (event) => {
     return
   }
 
-  const seats = readSeats(data.get('seats'))
-  if (seats === null) {
-    ui.message.textContent = 'Введите целое число участников от 1 до 5.'
+  const seatsResult = readSeats(data.get('seats'))
+
+  if (seatsResult.status === 'failed') {
+    ui.message.textContent = seatsResult.reason
     return
   }
 
-  // HW-А2: прочитайте data.get('workshop') через readWorkshop, обработайте отказ.
-  // HW-А3: сравните число участников с остатком мест выбранного занятия до изменения bookings.
+  const seats = seatsResult.value 
+
+  const workshopResult = readWorkshop(data.get('workshop'))
+
+  if (workshopResult.status === 'failed') {
+    ui.message.textContent = workshopResult.reason
+    return
+  }
+
+  const selectedWorkshop = workshopResult.value
+
+  const remainingSeatsCount = getRemainingSeats(bookings, selectedWorkshop)
+  if (seats > remainingSeatsCount) {
+    ui.message.textContent = `Недостаточно мест для вашей группы. \
+                              Свободных мест: ${remainingSeatsCount}`
+    return
+  }
 
   const booking: Booking = {
     id: crypto.randomUUID(),
@@ -156,8 +199,9 @@ ui.form.addEventListener('submit', (event) => {
     seats,
     status: 'new',
     source: 'web',
-    // HW-А1: добавьте проверенное занятие.
+    workshop: selectedWorkshop
   }
+  
   bookings.push(booking)
   render(bookings)
   ui.message.textContent = 'Заявка добавлена.'
