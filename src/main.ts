@@ -6,12 +6,11 @@ import { initialBookings } from './data/initial-bookings'
 import { TYPESCRIPT_CAPACITY, BUILD_CAPACITY } from './data/capacities'
 import { countSeats } from './lib/count-seats'
 import { getRemainingSeats } from './lib/availability'
-// HW-Б1: подключите расчёты из ./lib/availability.
-// HW-Б2: импортируйте ./assets/workshops.svg как URL.
+
+import workshopUrl from './assets/workshops.svg'
 
 const bookings: Array<Booking> = [...initialBookings]
 
-// Проверка из практики уже работает. В базе менять её не требуется.
 function readSeats(raw: FormDataEntryValue | null): number | null {
   if (typeof raw !== 'string' || raw.trim() === '') return null
   const seats = Number(raw)
@@ -19,8 +18,6 @@ function readSeats(raw: FormDataEntryValue | null): number | null {
   return seats
 }
 
-// HW-А2: замените заглушку; нужный результат WorkshopId | null.
-// Для проверки через форму сначала включите список ui.workshop в месте HW-А4.
 function readWorkshop(raw: FormDataEntryValue | null): WorkshopId | null {
   const match = ids.find(id => id === raw)
   return match ?? null
@@ -112,12 +109,14 @@ if (!(form instanceof HTMLFormElement) || !(list instanceof HTMLUListElement)
   throw new Error('Не найдены элементы интерфейса')
 }
 
-// Проверенные DOM-элементы уже готовы к использованию.
+
 const ui = { form, list, total, message, workshop, typescriptFree, buildFree, logo, notice }
 
 ui.workshop.disabled = false
 ui.notice.remove()
-// Здесь же скройте или удалите найденный ui.notice после проверки DOM выше.
+
+ui.logo.hidden = false
+ui.logo.src = workshopUrl
 // HW-Б2: задайте ui.logo.src, alt и покажите изображение.
 
 function render(items: Booking[]) {
